@@ -6,6 +6,11 @@ from logging.config import fileConfig
 # Garante que a raiz do backend/ esteja no sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# No Windows, o ProactorEventLoop padrão não é totalmente suportado pelo
+# asyncpg (causa erros intermitentes de conexão). Ver app/db/session.py.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection

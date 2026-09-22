@@ -72,32 +72,57 @@ uptime-saas/
 
 ## Como rodar
 
+> Os comandos abaixo assumem que você está na raiz do projeto (a pasta `uptime-saas/`, que contém `backend/`, `frontend/` e `infra/`). Sempre que um passo pedir para voltar à raiz, use `cd ..` antes de entrar na próxima pasta — pular esse passo é a causa mais comum de erros como `cd : não é possível localizar o caminho` ou `pip install` falhando por "arquivo não encontrado".
+
 ### 1. Suba a infraestrutura (Postgres + Redis)
 
 ```bash
 cd infra
 docker compose up -d
+cd ..
 ```
 
 ### 2. Backend
 
+**macOS / Linux (bash/zsh):**
+
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# aplique as migrations (cria as tabelas no banco)
 alembic upgrade head
-
-# suba a API
 uvicorn app.main:app --reload --port 8000
+cd ..
 ```
 
-Em dois outros terminais (mesmo venv ativado), suba o worker e o scheduler:
+**Windows (PowerShell):**
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
+cd ..
+```
+
+Se o PowerShell bloquear a ativação do venv com um erro de política de execução, rode uma vez (na mesma sessão do terminal):
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+⚠️ **Confirme que o venv foi realmente ativado** antes de rodar `pip install`: o prompt do terminal deve passar a mostrar `(.venv)` no início da linha. Se a ativação falhar silenciosamente (ou você pular esse passo) e você rodar `pip install -r requirements.txt` mesmo assim, o `pip` vai instalar tudo no **Python global da sua máquina**, podendo rebaixar/alterar versões de pacotes usados por outros projetos seus (ex.: `fastapi`, `pydantic`, `httpx`, `alembic`). Se isso já aconteceu, reative o venv corretamente e reinstale ali; para restaurar o ambiente global, rode `pip install --upgrade` nos pacotes/projetos afetados para que o `pip` resolva versões compatíveis novamente.
+
+Abra um **novo terminal** (com o venv ativado, repetindo a ativação acima) para o worker, e outro para o scheduler:
 
 ```bash
 taskiq worker app.workers.broker:broker app.workers.tasks
+```
+
+```bash
 python -m app.workers.scheduler
 ```
 
@@ -105,17 +130,20 @@ A API fica disponível em `http://localhost:8000` (docs interativas em `/docs`).
 
 ### 3. Frontend
 
+Em outro terminal, a partir da raiz do projeto:
+
 ```bash
 cd frontend
 npm install
 npm run dev
+cd ..
 ```
 
 A aplicação fica disponível em `http://localhost:3000`.
 
 ### Windows: script automatizado
 
-O arquivo `setup.ps1` na raiz do projeto executa todos os passos acima (infra, backend, worker, scheduler e frontend) de uma vez:
+O arquivo `setup.ps1` na raiz do projeto executa todos os passos acima (infra, backend, worker, scheduler e frontend) de uma vez, já com os comandos corretos para PowerShell:
 
 ```powershell
 .\setup.ps1
@@ -181,6 +209,9 @@ Quase todo o código-fonte (Python e TypeScript/CSS) tinha um BOM UTF-8 (`\ufeff
 
 ### 6. Dependências do frontend com vulnerabilidade crítica (CVE-2025-66478 / CVE-2025-55182)
 O projeto fixava `next@16.0.0` e `react`/`react-dom@19.0.0`, versões afetadas por uma vulnerabilidade crítica (CVSS 10.0) de execução remota de código no protocolo de React Server Components, com exploração confirmada. **Correção:** atualizado para `next@^16.0.7` e `react`/`react-dom@^19.2.1` (e `@types/*` correspondentes) — versões com o patch de segurança. Após a atualização, `npm audit` não reporta mais vulnerabilidades.
+
+### 7. `asyncpg` incompatível com o event loop padrão do Windows
+No Windows, o `asyncio` usa por padrão o `ProactorEventLoop`, que não é totalmente suportado pelo `asyncpg`. Isso causava falhas intermitentes de conexão logo no `alembic upgrade head` (e afetaria a API e os workers da mesma forma), com erros como `ConnectionDoesNotExistError: connection was closed in the middle of operation` e `OSError: [WinError 64] O nome da rede especificado não está mais disponível`. **Correção:** ao rodar no Windows, o projeto agora força o uso do `WindowsSelectorEventLoopPolicy` (recomendação oficial do próprio `asyncpg`) em `app/db/session.py` e `alembic/env.py`.
 
 ### Fluxo validado após as correções
 - Registro, login e `/auth/me` ✅
