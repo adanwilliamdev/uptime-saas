@@ -1,0 +1,199 @@
+# Uptime SaaS
+
+Aplicação full-stack de monitoramento de uptime: cadastre endpoints HTTP, acompanhe status, latência e incidentes em tempo real.
+
+- **Backend**: FastAPI + SQLAlchemy (async) + PostgreSQL + Redis + Taskiq (worker/scheduler) + WebSocket
+- **Frontend**: Next.js 16 (App Router) + React 19 + TanStack Query + Tailwind CSS
+
+---
+
+## Arquitetura
+
+```
+┌─────────────┐      REST + WS       ┌──────────────┐
+│   Frontend   │ ───────────────────▶ │   FastAPI     │
+│  (Next.js)   │ ◀─────────────────── │   Backend     │
+└─────────────┘                       └──────┬───────┘
+                                              │
+                         ┌────────────────────┼───────────────────┐
+                         ▼                    ▼                   ▼
+                  ┌─────────────┐      ┌─────────────┐    ┌──────────────┐
+                  │ PostgreSQL  │      │    Redis    │    │   Scheduler   │
+                  │  (dados)    │      │ (fila+pubsub)│───▶│  + Worker     │
+                  └─────────────┘      └─────────────┘    │  (Taskiq)     │
+                                                            └──────┬───────┘
+                                                                   │
+                                                          faz ping HTTP nos
+                                                          monitores ativos
+```
+
+O **scheduler** varre os monitores ativos a cada 10s e enfileira uma task `check_endpoint` por monitor. O **worker** (Taskiq) consome a fila, faz a requisição HTTP, grava o resultado em `ping_logs`, abre/fecha `incidents` conforme o status, e publica eventos no canal Redis `incidents`. O endpoint `/ws/incidents` repassa esses eventos ao frontend em tempo real.
+
+---
+
+## Estrutura do projeto
+
+```
+uptime-saas/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/        # rotas (auth, monitors, websocket)
+│   │   ├── core/          # config e segurança (JWT, hash de senha)
+│   │   ├── db/            # engine/sessão SQLAlchemy async
+│   │   ├── models/        # modelos ORM (User, Monitor, PingLog, Incident)
+│   │   ├── schemas/       # schemas Pydantic
+│   │   ├── services/      # regras de negócio (auth)
+│   │   └── workers/       # broker, tasks e scheduler (Taskiq)
+│   ├── alembic/           # migrations
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── app/           # páginas (App Router)
+│   │   ├── components/ui/ # componentes de UI reutilizáveis
+│   │   ├── hooks/         # hooks de dados (React Query)
+│   │   ├── lib/           # cliente axios, utils
+│   │   └── types/         # tipos TypeScript compartilhados
+│   └── package.json
+├── infra/
+│   └── docker-compose.yml # Postgres + Redis
+└── setup.ps1               # bootstrap automatizado (Windows/PowerShell)
+```
+
+---
+
+## Pré-requisitos
+
+- Python 3.12+
+- Node.js 20+ e npm
+- Docker (para Postgres/Redis) — ou instalações locais equivalentes
+- Windows + PowerShell, caso use o `setup.ps1` (em Linux/macOS, siga os passos manuais abaixo)
+
+---
+
+## Como rodar
+
+### 1. Suba a infraestrutura (Postgres + Redis)
+
+```bash
+cd infra
+docker compose up -d
+```
+
+### 2. Backend
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# aplique as migrations (cria as tabelas no banco)
+alembic upgrade head
+
+# suba a API
+uvicorn app.main:app --reload --port 8000
+```
+
+Em dois outros terminais (mesmo venv ativado), suba o worker e o scheduler:
+
+```bash
+taskiq worker app.workers.broker:broker app.workers.tasks
+python -m app.workers.scheduler
+```
+
+A API fica disponível em `http://localhost:8000` (docs interativas em `/docs`).
+
+### 3. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+A aplicação fica disponível em `http://localhost:3000`.
+
+### Windows: script automatizado
+
+O arquivo `setup.ps1` na raiz do projeto executa todos os passos acima (infra, backend, worker, scheduler e frontend) de uma vez:
+
+```powershell
+.\setup.ps1
+```
+
+---
+
+## Variáveis de ambiente
+
+**`backend/.env`**
+
+| Variável | Descrição |
+|---|---|
+| `DATABASE_URL` | string de conexão async do Postgres (`postgresql+asyncpg://...`) |
+| `REDIS_URL` | string de conexão do Redis |
+| `SECRET_KEY` | chave usada para assinar os tokens JWT — **troque em produção** |
+| `ALGORITHM` | algoritmo do JWT (padrão `HS256`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | validade do token de acesso |
+
+**`frontend/.env.local`**
+
+| Variável | Descrição |
+|---|---|
+| `NEXT_PUBLIC_API_URL` | URL base da API consumida pelo frontend |
+
+---
+
+## Principais endpoints da API
+
+| Método | Rota | Descrição |
+|---|---|---|
+| POST | `/api/v1/auth/register` | Cria um usuário |
+| POST | `/api/v1/auth/login` | Autentica e retorna um JWT |
+| GET | `/api/v1/auth/me` | Retorna o usuário autenticado |
+| GET | `/api/v1/monitors` | Lista os monitores do usuário |
+| POST | `/api/v1/monitors` | Cria um monitor |
+| PATCH | `/api/v1/monitors/{id}` | Atualiza um monitor |
+| DELETE | `/api/v1/monitors/{id}` | Remove um monitor |
+| GET | `/api/v1/monitors/{id}/logs` | Histórico de checagens (ping logs) |
+| GET | `/api/v1/monitors/{id}/uptime` | Percentual de uptime e latência média |
+| WS | `/ws/incidents` | Stream em tempo real de eventos de incidente |
+
+---
+
+## Testes realizados e correções aplicadas
+
+O projeto foi validado de ponta a ponta (Postgres + Redis reais, API rodando, worker executado manualmente, build de produção do frontend). Os seguintes problemas foram encontrados e corrigidos:
+
+### 1. Migration inicial ausente (banco de dados vazio)
+Não existia nenhum arquivo em `alembic/versions/`, então `alembic upgrade head` não criava nenhuma tabela — a aplicação subia, mas qualquer chamada ao banco falhava. **Correção:** gerada a migration inicial (`initial schema`) cobrindo `users`, `monitors`, `ping_logs` e `incidents`.
+
+### 2. Incompatibilidade `passlib` × `bcrypt` (registro/login quebrados)
+`requirements.txt` fixava `passlib[bcrypt]==1.7.4` mas não fixava a versão do `bcrypt`. O `pip` instalava a versão mais recente (5.x), incompatível com a detecção interna do `passlib`, causando erro 500 em **qualquer** cadastro ou login (`ValueError: password cannot be longer than 72 bytes`). **Correção:** fixada a versão `bcrypt==4.0.1`, compatível com `passlib==1.7.4`.
+
+### 3. `HttpUrl` do Pydantic quebrando criação/edição de monitores
+`MonitorCreate.url`/`MonitorUpdate.url` usam o tipo `HttpUrl` do Pydantic. Ao repassar `model_dump()` direto para o modelo SQLAlchemy, o valor ia como objeto `Url` (não `str`), e o driver `asyncpg` rejeitava a query (`DataError: expected str, got Url`), quebrando `POST` e `PATCH /monitors`. **Correção:** a URL agora é convertida explicitamente para `str` antes de ser persistida.
+
+### 4. Componente `Input` do frontend corrompido
+`frontend/src/components/ui/input.tsx` continha, no lugar do componente React, o texto literal `System.Collections.ArrayList+ArrayListEnumeratorSimple` — um artefato de um bug no script `setup.ps1` (provável `Get-Content`/junção de array mal feita ao gerar arquivos). Isso quebrava a página inteira, já que o componente é usado no dashboard. **Correção:** componente `Input` recriado seguindo o mesmo padrão dos demais componentes de UI do projeto (`Button`, `Card`, `Label`).
+
+### 5. BOM (Byte Order Mark) no início de praticamente todos os arquivos
+Quase todo o código-fonte (Python e TypeScript/CSS) tinha um BOM UTF-8 (`\ufeff`) no início do arquivo — outro efeito colateral da geração via PowerShell. Na maioria das linguagens isso passa despercebido, mas em `globals.css` ele quebrava o build do Next.js (Turbopack não consegue parsear CSS com BOM): `Error: Parsing CSS source code failed`. **Correção:** BOM removido de todos os arquivos do projeto (30 arquivos afetados).
+
+### 6. Dependências do frontend com vulnerabilidade crítica (CVE-2025-66478 / CVE-2025-55182)
+O projeto fixava `next@16.0.0` e `react`/`react-dom@19.0.0`, versões afetadas por uma vulnerabilidade crítica (CVSS 10.0) de execução remota de código no protocolo de React Server Components, com exploração confirmada. **Correção:** atualizado para `next@^16.0.7` e `react`/`react-dom@^19.2.1` (e `@types/*` correspondentes) — versões com o patch de segurança. Após a atualização, `npm audit` não reporta mais vulnerabilidades.
+
+### Fluxo validado após as correções
+- Registro, login e `/auth/me` ✅
+- CRUD completo de monitores (criar, listar, atualizar, remover) ✅
+- Histórico de checagens (`/logs`) e estatísticas de uptime (`/uptime`) ✅
+- Execução da task de checagem (`check_endpoint`): grava ping, abre e fecha incidentes corretamente ✅
+- WebSocket `/ws/incidents` recebendo eventos publicados via Redis pub/sub ✅
+- Build de produção do frontend (`next build`) e renderização do dashboard ✅
+
+---
+
+## Observações e possíveis melhorias futuras
+
+- O card "Fora do Ar" no dashboard hoje conta monitores com `is_active = false` (monitoramento pausado), não monitores que estão de fato **fora do ar** no momento — vale considerar usar o status mais recente de `ping_logs`/`incidents` abertos para refletir isso com mais precisão.
+- Não há testes automatizados no diretório `backend/tests` — os testes desta rodada foram feitos manualmente contra uma instância real (Postgres + Redis). Recomenda-se adicionar testes com `pytest` + `httpx.AsyncClient` cobrindo os fluxos de auth e monitores.
+- Não existem páginas de login/registro no frontend; o interceptor do axios já redireciona para `/login` em caso de 401, mas essa rota ainda precisa ser criada.
