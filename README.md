@@ -158,10 +158,11 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 O Docker Desktop não está aberto/rodando. Abra o Docker Desktop, espere ele ficar "Running" e rode o comando de novo.
 
 **`Error response from daemon: ports are not available ... bind: ... proibida pelas permissões de acesso` (WinError 10013) ao subir o Postgres/Redis**
-Isso indica que outro processo já está usando a porta (5432 ou 6379), ou que o Windows reservou temporariamente essa porta para outro fim (comum com Hyper-V/WSL2). Passos para resolver, na ordem:
-1. Confirme se não há um PostgreSQL/Redis instalado nativamente no Windows já ouvindo nessas portas: `Get-Service *postgres*`, `Get-Service *redis*`, ou `netstat -ano | findstr :5432`.
+Isso indica que outro processo já está usando a porta, ou que o Windows reservou temporariamente essa porta para outro fim (comum com Hyper-V/WSL2 — nesse caso o bind falha com erro de *permissão*, não com "endereço já em uso"). Desde a correção do item 10 abaixo, o Postgres já publica em `5433` (não mais `5432`) justamente para evitar esse conflito. Se ainda assim acontecer (em `5433` ou em `6379`, do Redis), passos para resolver, na ordem:
+1. Confirme se não há um PostgreSQL/Redis instalado nativamente no Windows já ouvindo nessas portas: `Get-Service *postgres*`, `Get-Service *redis*`, ou `netstat -ano | findstr :5433`.
 2. Remova containers antigos de tentativas anteriores, que podem ter ficado presos com outra configuração de porta: `docker rm -f uptime_postgres uptime_redis` e rode `docker compose up -d` de novo.
-3. Se persistir, reinicie o serviço de NAT do Windows (PowerShell **como Administrador**): `net stop winnat` seguido de `net start winnat`, e tente novamente.
+3. Verifique se a porta caiu numa faixa excluída do Windows: `netsh interface ipv4 show excludedportrange protocol=tcp`. Se estiver, troque o host port em `infra/docker-compose.yml` (e o valor correspondente em `backend/.env`) para outro número fora dessa faixa.
+4. Se persistir, reinicie o serviço de NAT do Windows (PowerShell **como Administrador**): `net stop winnat` seguido de `net start winnat`, e tente novamente.
 
 ---
 
@@ -232,6 +233,9 @@ Mesmo depois da correção acima, a conexão com o Postgres ainda podia falhar n
 
 ### 9. Acentos corrompidos na saída do `setup.ps1` (mojibake)
 Depois de remover o BOM de todos os arquivos do projeto para corrigir o `globals.css` (item 5), os textos acentuados do `setup.ps1` passaram a aparecer corrompidos no console (`dependÃªncias` em vez de `dependências`). Causa: o Windows PowerShell 5.1 (diferente do PowerShell 7+) só interpreta um `.ps1` como UTF-8 se o arquivo tiver o BOM; sem ele, usa a codepage padrão do sistema. **Correção:** o BOM foi restaurado especificamente em `setup.ps1` (mantendo-o removido dos demais arquivos, onde ele causava problemas).
+
+### 10. Bind na porta 5432 falhando por permissão no Windows (WinError 10013), quebrando migrations e scheduler em cascata
+Ao subir o Postgres via `docker compose up -d`, o bind de `127.0.0.1:5432` falhava com um erro de **permissão de acesso ao socket** (não o clássico "porta já em uso") — sintoma comum quando o Hyper-V/WSL2 reserva dinamicamente faixas de portas no Windows. Como o `setup.ps1` original não verificava se o Postgres realmente subiu antes de continuar, o script seguia direto para `alembic upgrade head` e para o scheduler, que falhavam em cascata com `ConnectionDoesNotExistError: connection was closed in the middle of operation`, mascarando a causa real. **Correção:** o host port do Postgres em `infra/docker-compose.yml` foi movido de `5432` para `5433` (a porta dentro do container continua `5432`), com `DATABASE_URL` em `backend/.env` atualizada de acordo; e `setup.ps1` agora espera ativamente o container `uptime_postgres` ficar `healthy` (via `docker inspect`) antes de prosseguir, abortando com uma mensagem clara — em vez de deixar o erro estourar mais adiante nas migrations.
 
 ### 10. Não havia como fazer login pela interface (frontend incompleto)
 O dashboard já chamava a API assumindo um token salvo em `localStorage`, e o interceptor do axios já redirecionava para `/login` em caso de 401 — mas essa rota **não existia**, então o app ficava preso num loop de 404 e era impossível usar a aplicação pela interface (só dava pra criar usuário/logar chamando a API diretamente). **Correção:** criada a página `frontend/src/app/login/page.tsx` (login e cadastro, com alternância entre os dois modos) e o hook `frontend/src/hooks/useAuth.ts`; o dashboard (`app/page.tsx`) agora verifica se há um token antes de renderizar, redireciona para `/login` quando não há, e ganhou um botão "Sair".
