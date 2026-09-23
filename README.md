@@ -146,8 +146,22 @@ A aplicação fica disponível em `http://localhost:3000`.
 O arquivo `setup.ps1` na raiz do projeto executa todos os passos acima (infra, backend, worker, scheduler e frontend) de uma vez, já com os comandos corretos para PowerShell:
 
 ```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\setup.ps1
 ```
+
+> O `Set-ExecutionPolicy` acima é necessário porque, por padrão, o Windows bloqueia a execução de **qualquer** `.ps1` não assinado — inclusive o próprio `setup.ps1`, não só a ativação do venv. `-Scope Process` limita a liberação à janela do PowerShell atual, sem alterar a política do sistema.
+
+### Solução de problemas comuns no Windows
+
+**`failed to connect to the docker API` / `npipe:////./pipe/dockerDesktopLinuxEngine`**
+O Docker Desktop não está aberto/rodando. Abra o Docker Desktop, espere ele ficar "Running" e rode o comando de novo.
+
+**`Error response from daemon: ports are not available ... bind: ... proibida pelas permissões de acesso` (WinError 10013) ao subir o Postgres/Redis**
+Isso indica que outro processo já está usando a porta (5432 ou 6379), ou que o Windows reservou temporariamente essa porta para outro fim (comum com Hyper-V/WSL2). Passos para resolver, na ordem:
+1. Confirme se não há um PostgreSQL/Redis instalado nativamente no Windows já ouvindo nessas portas: `Get-Service *postgres*`, `Get-Service *redis*`, ou `netstat -ano | findstr :5432`.
+2. Remova containers antigos de tentativas anteriores, que podem ter ficado presos com outra configuração de porta: `docker rm -f uptime_postgres uptime_redis` e rode `docker compose up -d` de novo.
+3. Se persistir, reinicie o serviço de NAT do Windows (PowerShell **como Administrador**): `net stop winnat` seguido de `net start winnat`, e tente novamente.
 
 ---
 
@@ -219,6 +233,9 @@ Mesmo depois da correção acima, a conexão com o Postgres ainda podia falhar n
 ### 9. Acentos corrompidos na saída do `setup.ps1` (mojibake)
 Depois de remover o BOM de todos os arquivos do projeto para corrigir o `globals.css` (item 5), os textos acentuados do `setup.ps1` passaram a aparecer corrompidos no console (`dependÃªncias` em vez de `dependências`). Causa: o Windows PowerShell 5.1 (diferente do PowerShell 7+) só interpreta um `.ps1` como UTF-8 se o arquivo tiver o BOM; sem ele, usa a codepage padrão do sistema. **Correção:** o BOM foi restaurado especificamente em `setup.ps1` (mantendo-o removido dos demais arquivos, onde ele causava problemas).
 
+### 10. Não havia como fazer login pela interface (frontend incompleto)
+O dashboard já chamava a API assumindo um token salvo em `localStorage`, e o interceptor do axios já redirecionava para `/login` em caso de 401 — mas essa rota **não existia**, então o app ficava preso num loop de 404 e era impossível usar a aplicação pela interface (só dava pra criar usuário/logar chamando a API diretamente). **Correção:** criada a página `frontend/src/app/login/page.tsx` (login e cadastro, com alternância entre os dois modos) e o hook `frontend/src/hooks/useAuth.ts`; o dashboard (`app/page.tsx`) agora verifica se há um token antes de renderizar, redireciona para `/login` quando não há, e ganhou um botão "Sair".
+
 ### Fluxo validado após as correções
 - Registro, login e `/auth/me` ✅
 - CRUD completo de monitores (criar, listar, atualizar, remover) ✅
@@ -233,4 +250,3 @@ Depois de remover o BOM de todos os arquivos do projeto para corrigir o `globals
 
 - O card "Fora do Ar" no dashboard hoje conta monitores com `is_active = false` (monitoramento pausado), não monitores que estão de fato **fora do ar** no momento — vale considerar usar o status mais recente de `ping_logs`/`incidents` abertos para refletir isso com mais precisão.
 - Não há testes automatizados no diretório `backend/tests` — os testes desta rodada foram feitos manualmente contra uma instância real (Postgres + Redis). Recomenda-se adicionar testes com `pytest` + `httpx.AsyncClient` cobrindo os fluxos de auth e monitores.
-- Não existem páginas de login/registro no frontend; o interceptor do axios já redireciona para `/login` em caso de 401, mas essa rota ainda precisa ser criada.

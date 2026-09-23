@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Activity, AlertTriangle, Gauge, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Activity, AlertTriangle, Gauge, LogOut, Plus } from "lucide-react";
 import { useMonitors, useCreateMonitor, useDeleteMonitor } from "@/hooks/useMonitors";
+import { isAuthenticated, logout } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +12,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
+    setCheckingAuth(false);
+  }, [router]);
+
   const { data: monitors = [], isLoading } = useMonitors();
   const createMonitor = useCreateMonitor();
   const deleteMonitor = useDeleteMonitor();
@@ -32,6 +45,8 @@ export default function DashboardPage() {
     setShowForm(false);
   };
 
+  if (checkingAuth) return null;
+
   return (
     <main className="container mx-auto py-10 space-y-8">
       <header className="flex items-center justify-between">
@@ -39,9 +54,14 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold">Painel de Uptime</h1>
           <p className="text-muted-foreground">Monitore seus endpoints em tempo real</p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          <Plus className="w-4 h-4 mr-2" /> Novo Monitor
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowForm((v) => !v)}>
+            <Plus className="w-4 h-4 mr-2" /> Novo Monitor
+          </Button>
+          <Button variant="outline" onClick={logout}>
+            <LogOut className="w-4 h-4 mr-2" /> Sair
+          </Button>
+        </div>
       </header>
 
       {/* KPIs */}
