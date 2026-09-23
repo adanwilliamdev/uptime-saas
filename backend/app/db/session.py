@@ -13,7 +13,16 @@ from app.core.config import settings
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-engine = create_async_engine(settings.DATABASE_URL, echo=False, future=True)
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=False,
+    future=True,
+    # pool_pre_ping testa a conexão (SELECT 1) antes de reutilizá-la do pool;
+    # evita usar uma conexão que o Docker Desktop/WSL2 já derrubou em segundo
+    # plano, o que no Windows aparece como ConnectionResetError/WinError 10054.
+    pool_pre_ping=True,
+    pool_recycle=280,
+)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 

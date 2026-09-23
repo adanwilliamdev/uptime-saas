@@ -3,6 +3,8 @@ import os
 import sys
 from logging.config import fileConfig
 
+import asyncpg.exceptions as pg_exceptions
+
 # Garante que a raiz do backend/ esteja no sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -55,9 +57,29 @@ async def run_async_migrations() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+    # No Windows, mesmo com o WindowsSelectorEventLoopPolicy acima, a primeira
+    # conexão logo após o container do Postgres subir às vezes é derrubada
+    # pelo Docker Desktop (vpnkit/WSL2) com ConnectionResetError/WinError 10054
+    # ou ConnectionDoesNotExistError. Como essa migration roda uma única vez
+    # (sem pool para reaproveitar conexão), fazemos algumas tentativas com
+    # backoff antes de desistir.
+    last_error: Exception | None = None
+    for attempt in range(1, 6):
+        try:
+            async with connectable.connect() as connection:
+                await connection.run_sync(do_run_migrations)
+            last_error = None
+            break
+        except (OSError, ConnectionError, pg_exceptions.ConnectionDoesNotExistError, pg_exceptions.CannotConnectNowError) as exc:
+            last_error = exc
+            print(
+                f"[alembic] Conexão com o Postgres falhou (tentativa {attempt}/5): "
+                f"{exc!r}. Tentando novamente em {attempt * 2}s..."
+            )
+            await asyncio.sleep(attempt * 2)
     await connectable.dispose()
+    if last_error is not None:
+        raise last_error
 
 
 def run_migrations_online() -> None:

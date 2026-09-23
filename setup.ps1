@@ -41,6 +41,12 @@ pip install -r requirements.txt
 
 Write-Host "`n=== 4. Rodando migrations Alembic ===" -ForegroundColor Cyan
 alembic upgrade head
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "`n❌ As migrations do Alembic falharam (código $LASTEXITCODE)." -ForegroundColor Red
+    Write-Host "   Sem as tabelas criadas, a API/worker/scheduler vão falhar em cascata com 'relation ... does not exist'." -ForegroundColor Yellow
+    Write-Host "   Confira o erro acima, resolva e rode o setup.ps1 novamente. Abortando." -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "`n=== 5. Iniciando FastAPI (porta 8000) ===" -ForegroundColor Cyan
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; . .\.venv\Scripts\Activate.ps1; uvicorn app.main:app --reload --port 8000"
