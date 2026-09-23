@@ -1,80 +1,175 @@
-# Uptime SaaS
+# 🚀 Uptime SaaS
 
-Aplicação full-stack de monitoramento de uptime: cadastre endpoints HTTP, acompanhe status, latência e incidentes em tempo real.
+Plataforma full-stack para **monitoramento de disponibilidade de aplicações e APIs**, permitindo cadastrar endpoints HTTP, acompanhar status, latência, uptime e incidentes em tempo real.
 
-- **Backend**: FastAPI + SQLAlchemy (async) + PostgreSQL + Redis + Taskiq (worker/scheduler) + WebSocket
-- **Frontend**: Next.js 16 (App Router) + React 19 + TanStack Query + Tailwind CSS
-
----
-
-## Arquitetura
-
-```
-┌─────────────┐      REST + WS       ┌──────────────┐
-│   Frontend   │ ───────────────────▶ │   FastAPI     │
-│  (Next.js)   │ ◀─────────────────── │   Backend     │
-└─────────────┘                       └──────┬───────┘
-                                              │
-                         ┌────────────────────┼───────────────────┐
-                         ▼                    ▼                   ▼
-                  ┌─────────────┐      ┌─────────────┐    ┌──────────────┐
-                  │ PostgreSQL  │      │    Redis    │    │   Scheduler   │
-                  │  (dados)    │      │ (fila+pubsub)│───▶│  + Worker     │
-                  └─────────────┘      └─────────────┘    │  (Taskiq)     │
-                                                            └──────┬───────┘
-                                                                   │
-                                                          faz ping HTTP nos
-                                                          monitores ativos
-```
-
-O **scheduler** varre os monitores ativos a cada 10s e enfileira uma task `check_endpoint` por monitor. O **worker** (Taskiq) consome a fila, faz a requisição HTTP, grava o resultado em `ping_logs`, abre/fecha `incidents` conforme o status, e publica eventos no canal Redis `incidents`. O endpoint `/ws/incidents` repassa esses eventos ao frontend em tempo real.
+O sistema utiliza uma arquitetura assíncrona baseada em **FastAPI, PostgreSQL, Redis e Taskiq**, com comunicação em tempo real via WebSocket.
 
 ---
 
-## Estrutura do projeto
+## ✨ Funcionalidades
 
+* 🔐 Autenticação com JWT
+* 👤 Cadastro e gerenciamento de usuários
+* 🌐 Cadastro e gerenciamento de monitores HTTP
+* 📡 Verificação automática dos endpoints
+* ⚡ Monitoramento assíncrono
+* 📊 Histórico de verificações e latência
+* 📈 Cálculo de uptime
+* 🚨 Abertura e encerramento automático de incidentes
+* 🔄 Atualizações de incidentes em tempo real
+* 🔌 WebSocket integrado ao Redis Pub/Sub
+* 🗄️ Migrations com Alembic
+* 🐳 PostgreSQL e Redis via Docker Compose
+* 📱 Interface responsiva com Next.js
+
+---
+
+## 🧩 Stack
+
+### Backend
+
+| Tecnologia       | Utilização           |
+| ---------------- | -------------------- |
+| **Python 3.12+** | Linguagem principal  |
+| **FastAPI**      | API REST e WebSocket |
+| **SQLAlchemy**   | ORM assíncrono       |
+| **PostgreSQL**   | Banco de dados       |
+| **Redis**        | Fila e Pub/Sub       |
+| **Taskiq**       | Workers e scheduler  |
+| **Alembic**      | Migrations           |
+| **Pydantic**     | Validação de dados   |
+| **JWT**          | Autenticação         |
+
+### Frontend
+
+| Tecnologia         | Utilização             |
+| ------------------ | ---------------------- |
+| **Next.js 16**     | Framework web          |
+| **React 19**       | Interface              |
+| **TypeScript**     | Tipagem                |
+| **TanStack Query** | Gerenciamento de dados |
+| **Tailwind CSS**   | Estilização            |
+| **Axios**          | Comunicação com a API  |
+
+### Infraestrutura
+
+* Docker
+* Docker Compose
+* PostgreSQL
+* Redis
+
+---
+
+## 🏗️ Arquitetura
+
+```text
+┌──────────────────────┐
+│      Frontend        │
+│   Next.js + React    │
+└──────────┬───────────┘
+           │
+       REST + WS
+           │
+           ▼
+┌──────────────────────┐
+│       FastAPI        │
+│       Backend        │
+└──────────┬───────────┘
+           │
+     ┌─────┴─────┐
+     │           │
+     ▼           ▼
+┌──────────┐  ┌──────────┐
+│PostgreSQL│  │  Redis   │
+│  Dados   │  │Fila/PubSub│
+└──────────┘  └────┬─────┘
+                   │
+                   ▼
+            ┌──────────────┐
+            │ Taskiq Worker│
+            │ + Scheduler  │
+            └──────┬───────┘
+                   │
+                   ▼
+             HTTP Monitors
 ```
+
+### Fluxo de monitoramento
+
+O scheduler verifica os monitores ativos a cada **10 segundos** e coloca uma task `check_endpoint` na fila.
+
+O worker do Taskiq:
+
+1. Consome a task da fila.
+2. Realiza a requisição HTTP.
+3. Registra o resultado em `ping_logs`.
+4. Identifica alterações de disponibilidade.
+5. Abre ou encerra incidentes.
+6. Publica o evento no Redis Pub/Sub.
+7. O WebSocket `/ws/incidents` transmite a atualização para o frontend.
+
+---
+
+## 📁 Estrutura do projeto
+
+```text
 uptime-saas/
+│
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/        # rotas (auth, monitors, websocket)
-│   │   ├── core/          # config e segurança (JWT, hash de senha)
-│   │   ├── db/            # engine/sessão SQLAlchemy async
-│   │   ├── models/        # modelos ORM (User, Monitor, PingLog, Incident)
-│   │   ├── schemas/       # schemas Pydantic
-│   │   ├── services/      # regras de negócio (auth)
-│   │   └── workers/       # broker, tasks e scheduler (Taskiq)
-│   ├── alembic/           # migrations
+│   │   ├── api/v1/            # Rotas REST e WebSocket
+│   │   ├── core/              # Configurações e segurança
+│   │   ├── db/                # SQLAlchemy e sessões
+│   │   ├── models/            # Modelos ORM
+│   │   ├── schemas/           # Schemas Pydantic
+│   │   ├── services/          # Regras de negócio
+│   │   └── workers/           # Tasks e scheduler
+│   ├── alembic/               # Migrations
 │   └── requirements.txt
+│
 ├── frontend/
 │   ├── src/
-│   │   ├── app/           # páginas (App Router)
-│   │   ├── components/ui/ # componentes de UI reutilizáveis
-│   │   ├── hooks/         # hooks de dados (React Query)
-│   │   ├── lib/           # cliente axios, utils
-│   │   └── types/         # tipos TypeScript compartilhados
+│   │   ├── app/               # App Router
+│   │   ├── components/ui/     # Componentes reutilizáveis
+│   │   ├── hooks/             # Hooks de dados
+│   │   ├── lib/               # Axios e utilitários
+│   │   └── types/             # Tipos TypeScript
 │   └── package.json
+│
 ├── infra/
-│   └── docker-compose.yml # Postgres + Redis
-└── setup.ps1               # bootstrap automatizado (Windows/PowerShell)
+│   └── docker-compose.yml      # PostgreSQL + Redis
+│
+└── setup.ps1                   # Setup automatizado para Windows
 ```
 
 ---
 
-## Pré-requisitos
+## ⚙️ Pré-requisitos
 
-- Python 3.12+
-- Node.js 20+ e npm
-- Docker (para Postgres/Redis) — ou instalações locais equivalentes
-- Windows + PowerShell, caso use o `setup.ps1` (em Linux/macOS, siga os passos manuais abaixo)
+Antes de executar o projeto, certifique-se de possuir:
+
+* Python **3.12+**
+* Node.js **20+**
+* npm
+* Docker Desktop
+* Git
+
+> Para utilizar o `setup.ps1`, é necessário Windows + PowerShell.
 
 ---
 
-## Como rodar
+## 🚀 Instalação
 
-> Os comandos abaixo assumem que você está na raiz do projeto (a pasta `uptime-saas/`, que contém `backend/`, `frontend/` e `infra/`). Sempre que um passo pedir para voltar à raiz, use `cd ..` antes de entrar na próxima pasta — pular esse passo é a causa mais comum de erros como `cd : não é possível localizar o caminho` ou `pip install` falhando por "arquivo não encontrado".
+Clone o repositório:
 
-### 1. Suba a infraestrutura (Postgres + Redis)
+```bash
+git clone <REPOSITORY_URL>
+cd uptime-saas
+```
+
+### 1. Infraestrutura
+
+A partir da raiz do projeto:
 
 ```bash
 cd infra
@@ -82,178 +177,265 @@ docker compose up -d
 cd ..
 ```
 
-### 2. Backend
+Isso inicializa:
 
-**macOS / Linux (bash/zsh):**
+* PostgreSQL
+* Redis
+
+---
+
+## 🐍 Backend
+
+### macOS / Linux
 
 ```bash
 cd backend
+
 python3 -m venv .venv
 source .venv/bin/activate
+
 pip install -r requirements.txt
+
 alembic upgrade head
+
 uvicorn app.main:app --reload --port 8000
-cd ..
 ```
 
-**Windows (PowerShell):**
+### Windows PowerShell
 
 ```powershell
 cd backend
+
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+
 pip install -r requirements.txt
+
 alembic upgrade head
+
 uvicorn app.main:app --reload --port 8000
-cd ..
 ```
 
-Se o PowerShell bloquear a ativação do venv com um erro de política de execução, rode uma vez (na mesma sessão do terminal):
+Caso o PowerShell bloqueie a execução do ambiente virtual:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-⚠️ **Confirme que o venv foi realmente ativado** antes de rodar `pip install`: o prompt do terminal deve passar a mostrar `(.venv)` no início da linha. Se a ativação falhar silenciosamente (ou você pular esse passo) e você rodar `pip install -r requirements.txt` mesmo assim, o `pip` vai instalar tudo no **Python global da sua máquina**, podendo rebaixar/alterar versões de pacotes usados por outros projetos seus (ex.: `fastapi`, `pydantic`, `httpx`, `alembic`). Se isso já aconteceu, reative o venv corretamente e reinstale ali; para restaurar o ambiente global, rode `pip install --upgrade` nos pacotes/projetos afetados para que o `pip` resolva versões compatíveis novamente.
+O terminal deverá apresentar `(.venv)` antes dos comandos executados.
 
-Abra um **novo terminal** (com o venv ativado, repetindo a ativação acima) para o worker, e outro para o scheduler:
+---
+
+## ⚙️ Worker e Scheduler
+
+Abra um novo terminal com o ambiente virtual ativado.
+
+### Worker
 
 ```bash
+cd backend
 taskiq worker app.workers.broker:broker app.workers.tasks
 ```
 
+### Scheduler
+
+Em outro terminal:
+
 ```bash
+cd backend
 python -m app.workers.scheduler
 ```
 
-A API fica disponível em `http://localhost:8000` (docs interativas em `/docs`).
+---
 
-### 3. Frontend
+## 💻 Frontend
 
-Em outro terminal, a partir da raiz do projeto:
+Em um novo terminal, a partir da raiz:
 
 ```bash
 cd frontend
+
 npm install
 npm run dev
-cd ..
 ```
 
-A aplicação fica disponível em `http://localhost:3000`.
+A aplicação ficará disponível em:
 
-### Windows: script automatizado
+```text
+http://localhost:3000
+```
 
-O arquivo `setup.ps1` na raiz do projeto executa todos os passos acima (infra, backend, worker, scheduler e frontend) de uma vez, já com os comandos corretos para PowerShell:
+A API ficará disponível em:
+
+```text
+http://localhost:8000
+```
+
+Documentação interativa:
+
+```text
+http://localhost:8000/docs
+```
+
+---
+
+## 🪟 Setup automatizado no Windows
+
+O projeto possui um script para automatizar a configuração da infraestrutura, backend, worker, scheduler e frontend.
+
+Execute no PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\setup.ps1
 ```
 
-> O `Set-ExecutionPolicy` acima é necessário porque, por padrão, o Windows bloqueia a execução de **qualquer** `.ps1` não assinado — inclusive o próprio `setup.ps1`, não só a ativação do venv. `-Scope Process` limita a liberação à janela do PowerShell atual, sem alterar a política do sistema.
+---
 
-### Solução de problemas comuns no Windows
+## 🔐 Variáveis de ambiente
 
-**`failed to connect to the docker API` / `npipe:////./pipe/dockerDesktopLinuxEngine`**
-O Docker Desktop não está aberto/rodando. Abra o Docker Desktop, espere ele ficar "Running" e rode o comando de novo.
+### Backend
 
-**`Error response from daemon: ports are not available ... bind: ... proibida pelas permissões de acesso` (WinError 10013) ao subir o Postgres/Redis**
-Isso indica que outro processo já está usando a porta, ou que o Windows reservou temporariamente essa porta para outro fim (comum com Hyper-V/WSL2 — nesse caso o bind falha com erro de *permissão*, não com "endereço já em uso"). Desde a correção do item 10 abaixo, o Postgres já publica em `5433` (não mais `5432`) justamente para evitar esse conflito. Se ainda assim acontecer (em `5433` ou em `6379`, do Redis), passos para resolver, na ordem:
-1. Confirme se não há um PostgreSQL/Redis instalado nativamente no Windows já ouvindo nessas portas: `Get-Service *postgres*`, `Get-Service *redis*`, ou `netstat -ano | findstr :5433`.
-2. Remova containers antigos de tentativas anteriores, que podem ter ficado presos com outra configuração de porta: `docker rm -f uptime_postgres uptime_redis` e rode `docker compose up -d` de novo.
-3. Verifique se a porta caiu numa faixa excluída do Windows: `netsh interface ipv4 show excludedportrange protocol=tcp`. Se estiver, troque o host port em `infra/docker-compose.yml` (e o valor correspondente em `backend/.env`) para outro número fora dessa faixa.
-4. Se persistir, reinicie o serviço de NAT do Windows (PowerShell **como Administrador**): `net stop winnat` seguido de `net start winnat`, e tente novamente.
+Arquivo:
+
+```text
+backend/.env
+```
+
+| Variável                      | Descrição                                      |
+| ----------------------------- | ---------------------------------------------- |
+| `DATABASE_URL`                | Conexão assíncrona com PostgreSQL              |
+| `REDIS_URL`                   | Conexão com Redis                              |
+| `SECRET_KEY`                  | Chave utilizada para assinatura dos tokens JWT |
+| `ALGORITHM`                   | Algoritmo utilizado pelo JWT                   |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Tempo de expiração do token                    |
+
+### Frontend
+
+Arquivo:
+
+```text
+frontend/.env.local
+```
+
+| Variável              | Descrição       |
+| --------------------- | --------------- |
+| `NEXT_PUBLIC_API_URL` | URL base da API |
+
+> Nunca versione credenciais, tokens ou chaves secretas no repositório.
 
 ---
 
-## Variáveis de ambiente
+## 🔌 API
 
-**`backend/.env`**
+### Autenticação
 
-| Variável | Descrição |
-|---|---|
-| `DATABASE_URL` | string de conexão async do Postgres (`postgresql+asyncpg://...`) |
-| `REDIS_URL` | string de conexão do Redis |
-| `SECRET_KEY` | chave usada para assinar os tokens JWT — **troque em produção** |
-| `ALGORITHM` | algoritmo do JWT (padrão `HS256`) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | validade do token de acesso |
+| Método | Endpoint                | Descrição                     |
+| ------ | ----------------------- | ----------------------------- |
+| `POST` | `/api/v1/auth/register` | Cria um usuário               |
+| `POST` | `/api/v1/auth/login`    | Autentica e retorna JWT       |
+| `GET`  | `/api/v1/auth/me`       | Retorna o usuário autenticado |
 
-**`frontend/.env.local`**
+### Monitores
 
-| Variável | Descrição |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | URL base da API consumida pelo frontend |
+| Método   | Endpoint                       | Descrição                 |
+| -------- | ------------------------------ | ------------------------- |
+| `GET`    | `/api/v1/monitors`             | Lista os monitores        |
+| `POST`   | `/api/v1/monitors`             | Cria um monitor           |
+| `PATCH`  | `/api/v1/monitors/{id}`        | Atualiza um monitor       |
+| `DELETE` | `/api/v1/monitors/{id}`        | Remove um monitor         |
+| `GET`    | `/api/v1/monitors/{id}/logs`   | Histórico de verificações |
+| `GET`    | `/api/v1/monitors/{id}/uptime` | Uptime e latência média   |
 
----
+### WebSocket
 
-## Principais endpoints da API
+```text
+/ws/incidents
+```
 
-| Método | Rota | Descrição |
-|---|---|---|
-| POST | `/api/v1/auth/register` | Cria um usuário |
-| POST | `/api/v1/auth/login` | Autentica e retorna um JWT |
-| GET | `/api/v1/auth/me` | Retorna o usuário autenticado |
-| GET | `/api/v1/monitors` | Lista os monitores do usuário |
-| POST | `/api/v1/monitors` | Cria um monitor |
-| PATCH | `/api/v1/monitors/{id}` | Atualiza um monitor |
-| DELETE | `/api/v1/monitors/{id}` | Remove um monitor |
-| GET | `/api/v1/monitors/{id}/logs` | Histórico de checagens (ping logs) |
-| GET | `/api/v1/monitors/{id}/uptime` | Percentual de uptime e latência média |
-| WS | `/ws/incidents` | Stream em tempo real de eventos de incidente |
+Canal utilizado para receber eventos de incidentes em tempo real.
 
 ---
 
-## Testes realizados e correções aplicadas
+## 🧪 Validação
 
-O projeto foi validado de ponta a ponta (Postgres + Redis reais, API rodando, worker executado manualmente, build de produção do frontend). Os seguintes problemas foram encontrados e corrigidos:
+O fluxo principal da aplicação foi validado utilizando PostgreSQL e Redis reais, incluindo execução da API, worker, scheduler e build de produção do frontend.
 
-### 1. Migration inicial ausente (banco de dados vazio)
-Não existia nenhum arquivo em `alembic/versions/`, então `alembic upgrade head` não criava nenhuma tabela — a aplicação subia, mas qualquer chamada ao banco falhava. **Correção:** gerada a migration inicial (`initial schema`) cobrindo `users`, `monitors`, `ping_logs` e `incidents`.
+### Fluxos validados
 
-### 2. Incompatibilidade `passlib` × `bcrypt` (registro/login quebrados)
-`requirements.txt` fixava `passlib[bcrypt]==1.7.4` mas não fixava a versão do `bcrypt`. O `pip` instalava a versão mais recente (5.x), incompatível com a detecção interna do `passlib`, causando erro 500 em **qualquer** cadastro ou login (`ValueError: password cannot be longer than 72 bytes`). **Correção:** fixada a versão `bcrypt==4.0.1`, compatível com `passlib==1.7.4`.
-
-### 3. `HttpUrl` do Pydantic quebrando criação/edição de monitores
-`MonitorCreate.url`/`MonitorUpdate.url` usam o tipo `HttpUrl` do Pydantic. Ao repassar `model_dump()` direto para o modelo SQLAlchemy, o valor ia como objeto `Url` (não `str`), e o driver `asyncpg` rejeitava a query (`DataError: expected str, got Url`), quebrando `POST` e `PATCH /monitors`. **Correção:** a URL agora é convertida explicitamente para `str` antes de ser persistida.
-
-### 4. Componente `Input` do frontend corrompido
-`frontend/src/components/ui/input.tsx` continha, no lugar do componente React, o texto literal `System.Collections.ArrayList+ArrayListEnumeratorSimple` — um artefato de um bug no script `setup.ps1` (provável `Get-Content`/junção de array mal feita ao gerar arquivos). Isso quebrava a página inteira, já que o componente é usado no dashboard. **Correção:** componente `Input` recriado seguindo o mesmo padrão dos demais componentes de UI do projeto (`Button`, `Card`, `Label`).
-
-### 5. BOM (Byte Order Mark) no início de praticamente todos os arquivos
-Quase todo o código-fonte (Python e TypeScript/CSS) tinha um BOM UTF-8 (`\ufeff`) no início do arquivo — outro efeito colateral da geração via PowerShell. Na maioria das linguagens isso passa despercebido, mas em `globals.css` ele quebrava o build do Next.js (Turbopack não consegue parsear CSS com BOM): `Error: Parsing CSS source code failed`. **Correção:** BOM removido de todos os arquivos do projeto (30 arquivos afetados).
-
-### 6. Dependências do frontend com vulnerabilidade crítica (CVE-2025-66478 / CVE-2025-55182)
-O projeto fixava `next@16.0.0` e `react`/`react-dom@19.0.0`, versões afetadas por uma vulnerabilidade crítica (CVSS 10.0) de execução remota de código no protocolo de React Server Components, com exploração confirmada. **Correção:** atualizado para `next@^16.0.7` e `react`/`react-dom@^19.2.1` (e `@types/*` correspondentes) — versões com o patch de segurança. Após a atualização, `npm audit` não reporta mais vulnerabilidades.
-
-### 7. `asyncpg` incompatível com o event loop padrão do Windows
-No Windows, o `asyncio` usa por padrão o `ProactorEventLoop`, que não é totalmente suportado pelo `asyncpg`. Isso causava falhas intermitentes de conexão logo no `alembic upgrade head` (e afetaria a API e os workers da mesma forma), com erros como `ConnectionDoesNotExistError: connection was closed in the middle of operation` e `OSError: [WinError 64] O nome da rede especificado não está mais disponível`. **Correção:** ao rodar no Windows, o projeto agora força o uso do `WindowsSelectorEventLoopPolicy` (recomendação oficial do próprio `asyncpg`) em `app/db/session.py` e `alembic/env.py`.
-
-### 8. `localhost` resolvendo para IPv6 no Windows ("localhost trap")
-Mesmo depois da correção acima, a conexão com o Postgres ainda podia falhar no Windows com `ConnectionResetError: [WinError 10054]`. Causa: no Windows, `localhost` é dual-stack e o sistema tenta `::1` (IPv6) primeiro; o Docker Desktop publica a porta do Postgres apenas em IPv4, então a tentativa IPv6 é recusada/resetada antes de cair para IPv4. **Correção:** `DATABASE_URL`/`REDIS_URL` em `backend/.env` agora usam `127.0.0.1` em vez de `localhost`, e `infra/docker-compose.yml` publica as portas explicitamente em `127.0.0.1` (`"127.0.0.1:5432:5432"` e `"127.0.0.1:6379:6379"`), eliminando a ambiguidade IPv4/IPv6 por completo.
-
-### 9. Acentos corrompidos na saída do `setup.ps1` (mojibake)
-Depois de remover o BOM de todos os arquivos do projeto para corrigir o `globals.css` (item 5), os textos acentuados do `setup.ps1` passaram a aparecer corrompidos no console (`dependÃªncias` em vez de `dependências`). Causa: o Windows PowerShell 5.1 (diferente do PowerShell 7+) só interpreta um `.ps1` como UTF-8 se o arquivo tiver o BOM; sem ele, usa a codepage padrão do sistema. **Correção:** o BOM foi restaurado especificamente em `setup.ps1` (mantendo-o removido dos demais arquivos, onde ele causava problemas).
-
-### 10. Bind na porta 5432 falhando por permissão no Windows (WinError 10013), quebrando migrations e scheduler em cascata
-Ao subir o Postgres via `docker compose up -d`, o bind de `127.0.0.1:5432` falhava com um erro de **permissão de acesso ao socket** (não o clássico "porta já em uso") — sintoma comum quando o Hyper-V/WSL2 reserva dinamicamente faixas de portas no Windows. Como o `setup.ps1` original não verificava se o Postgres realmente subiu antes de continuar, o script seguia direto para `alembic upgrade head` e para o scheduler, que falhavam em cascata com `ConnectionDoesNotExistError: connection was closed in the middle of operation`, mascarando a causa real. **Correção:** o host port do Postgres em `infra/docker-compose.yml` foi movido de `5432` para `5433` (a porta dentro do container continua `5432`), com `DATABASE_URL` em `backend/.env` atualizada de acordo; e `setup.ps1` agora espera ativamente o container `uptime_postgres` ficar `healthy` (via `docker inspect`) antes de prosseguir, abortando com uma mensagem clara — em vez de deixar o erro estourar mais adiante nas migrations.
-
-### 11. `ConnectionResetError`/`WinError 10054` intermitente mesmo com Postgres saudável, deixando o banco sem tabelas
-Mesmo com o container já `healthy` (item 10), a primeira conexão feita pelo `alembic upgrade head` logo em seguida às vezes ainda era derrubada pelo Docker Desktop (proxy vpnkit/WSL2) com `ConnectionResetError`/`ConnectionDoesNotExistError` — um problema intermitente e específico do ambiente Windows, não relacionado à porta em si. Como o `setup.ps1` não verificava o código de saída do `alembic`, o script seguia em frente mesmo com a migration falha, e o banco ficava sem nenhuma tabela — API, worker e scheduler então falhavam com `UndefinedTableError: relation "monitors" does not exist`. **Correção:** `alembic/env.py` agora tenta a conexão inicial da migration até 5 vezes com backoff antes de desistir; `app/db/session.py` habilita `pool_pre_ping=True` (descarta e reconecta automaticamente qualquer conexão que o Docker Desktop tenha derrubado em segundo plano, algo que afeta a API e os workers durante a execução normal, não só a migration) e `pool_recycle=280`; e `setup.ps1` agora verifica `$LASTEXITCODE` depois do `alembic upgrade head`, abortando com uma mensagem clara em vez de seguir para os próximos passos com o banco vazio.
-
-### 10. Não havia como fazer login pela interface (frontend incompleto)
-O dashboard já chamava a API assumindo um token salvo em `localStorage`, e o interceptor do axios já redirecionava para `/login` em caso de 401 — mas essa rota **não existia**, então o app ficava preso num loop de 404 e era impossível usar a aplicação pela interface (só dava pra criar usuário/logar chamando a API diretamente). **Correção:** criada a página `frontend/src/app/login/page.tsx` (login e cadastro, com alternância entre os dois modos) e o hook `frontend/src/hooks/useAuth.ts`; o dashboard (`app/page.tsx`) agora verifica se há um token antes de renderizar, redireciona para `/login` quando não há, e ganhou um botão "Sair".
-
-### Fluxo validado após as correções
-- Registro, login e `/auth/me` ✅
-- CRUD completo de monitores (criar, listar, atualizar, remover) ✅
-- Histórico de checagens (`/logs`) e estatísticas de uptime (`/uptime`) ✅
-- Execução da task de checagem (`check_endpoint`): grava ping, abre e fecha incidentes corretamente ✅
-- WebSocket `/ws/incidents` recebendo eventos publicados via Redis pub/sub ✅
-- Build de produção do frontend (`next build`) e renderização do dashboard ✅
+* ✅ Registro de usuário
+* ✅ Login
+* ✅ `/auth/me`
+* ✅ CRUD de monitores
+* ✅ Histórico de verificações
+* ✅ Estatísticas de uptime
+* ✅ Execução da task `check_endpoint`
+* ✅ Abertura e encerramento de incidentes
+* ✅ Redis Pub/Sub
+* ✅ WebSocket de incidentes
+* ✅ Build de produção do frontend
+* ✅ Renderização do dashboard
 
 ---
 
-## Observações e possíveis melhorias futuras
+## 🛠️ Correções técnicas relevantes
 
-- O card "Fora do Ar" no dashboard hoje conta monitores com `is_active = false` (monitoramento pausado), não monitores que estão de fato **fora do ar** no momento — vale considerar usar o status mais recente de `ping_logs`/`incidents` abertos para refletir isso com mais precisão.
-- Não há testes automatizados no diretório `backend/tests` — os testes desta rodada foram feitos manualmente contra uma instância real (Postgres + Redis). Recomenda-se adicionar testes com `pytest` + `httpx.AsyncClient` cobrindo os fluxos de auth e monitores.
+Durante a validação foram identificados e corrigidos problemas relacionados a:
+
+* Migration inicial do banco de dados.
+* Compatibilidade entre `passlib` e `bcrypt`.
+* Conversão de `HttpUrl` para `str` antes da persistência.
+* Componente `Input` do frontend.
+* BOM UTF-8 em arquivos do projeto.
+* Dependências vulneráveis do frontend.
+* Compatibilidade do `asyncpg` com o event loop do Windows.
+* Resolução de `localhost` para IPv6 no Windows.
+* Conflitos de porta do PostgreSQL.
+* Conexões instáveis entre Windows, Docker Desktop e WSL2.
+* Ausência da página de autenticação no frontend.
+
+---
+
+## 📊 Status do projeto
+
+| Área                 | Status |
+| -------------------- | ------ |
+| Autenticação         | ✅      |
+| Monitoramento HTTP   | ✅      |
+| Histórico de checks  | ✅      |
+| Uptime               | ✅      |
+| Incidentes           | ✅      |
+| Redis Pub/Sub        | ✅      |
+| WebSocket            | ✅      |
+| Worker               | ✅      |
+| Scheduler            | ✅      |
+| PostgreSQL           | ✅      |
+| Frontend             | ✅      |
+| Build de produção    | ✅      |
+| Testes automatizados | 🔲     |
+
+---
+
+## 🔭 Próximas melhorias
+
+* [ ] Adicionar testes automatizados com `pytest`
+* [ ] Adicionar testes de integração com `httpx.AsyncClient`
+* [ ] Melhorar a identificação de monitores realmente offline
+* [ ] Expandir métricas e observabilidade
+* [ ] Adicionar gráficos históricos de disponibilidade e latência
+* [ ] Implementar notificações de incidentes
+* [ ] Adicionar suporte a múltiplos intervalos de monitoramento
+
+---
+
+## 📌 Observação
+
+Atualmente, o indicador **"Fora do Ar"** considera monitores com `is_active = false`, representando monitoramento pausado. Uma evolução prevista é utilizar o último `ping_log` ou incidentes abertos para representar o estado real de disponibilidade.
+
+O projeto ainda não possui uma suíte de testes automatizados. A validação atual foi realizada manualmente utilizando PostgreSQL, Redis, API, workers, scheduler e build de produção.
+
+---
+
+## 📄 Licença
+
+Este projeto está disponível para fins de estudo, portfólio e evolução técnica.
