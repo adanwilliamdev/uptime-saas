@@ -9,6 +9,10 @@ const config: Config = {
         border: "hsl(var(--border))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        panel: {
+          DEFAULT: "hsl(var(--panel))",
+          hover: "hsl(var(--panel-hover))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -25,11 +29,21 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        signal: {
+          up: "hsl(var(--signal-up))",
+          down: "hsl(var(--signal-down))",
+          warn: "hsl(var(--signal-warn))",
+        },
+      },
+      fontFamily: {
+        sans: ["var(--font-body)", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "ui-sans-serif", "system-ui", "sans-serif"],
+        data: ["var(--font-data)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 3px)",
+        sm: "calc(var(--radius) - 5px)",
       },
     },
   },

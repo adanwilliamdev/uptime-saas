@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PulseMark } from "@/components/pulse-mark";
 import { useLogin, useRegister } from "@/hooks/useAuth";
+import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,12 +41,84 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>{mode === "login" ? "Entrar" : "Criar conta"}</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <main className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
+      {/* Painel de marca */}
+      <div className="relative hidden overflow-hidden bg-background lg:flex lg:flex-col lg:justify-between lg:p-12 bg-dot-grid">
+        <svg
+          viewBox="0 0 600 400"
+          preserveAspectRatio="none"
+          className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.25]"
+          aria-hidden="true"
+        >
+          <path
+            d="M-20 220 L120 220 L150 160 L185 280 L215 220 L340 220 L370 130 L400 310 L430 220 L620 220"
+            fill="none"
+            stroke="hsl(var(--primary))"
+            strokeWidth="2"
+            className="animate-pulse-line"
+          />
+        </svg>
+
+        <div className="relative flex items-center gap-2.5">
+          <PulseMark className="h-7 w-7" />
+          <span className="font-display text-lg font-semibold tracking-tight">Uptime</span>
+        </div>
+
+        <div className="relative max-w-sm">
+          <h1 className="font-display text-3xl font-semibold leading-tight tracking-tight">
+            Saiba antes dos seus clientes.
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            Verificações contínuas dos seus endpoints, com histórico de latência e
+            disponibilidade para cada monitor.
+          </p>
+        </div>
+      </div>
+
+      {/* Painel de formulário */}
+      <div className="flex items-center justify-center p-6">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
+            <PulseMark className="h-6 w-6" />
+            <span className="font-display text-base font-semibold">Uptime</span>
+          </div>
+
+          <div className="mb-6 inline-flex rounded-md border border-border bg-panel p-1">
+            <button
+              type="button"
+              onClick={() => setMode("login")}
+              className={cn(
+                "rounded-sm px-4 py-1.5 text-sm font-medium transition-colors",
+                mode === "login"
+                  ? "bg-panel-hover text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Entrar
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("register")}
+              className={cn(
+                "rounded-sm px-4 py-1.5 text-sm font-medium transition-colors",
+                mode === "register"
+                  ? "bg-panel-hover text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Criar conta
+            </button>
+          </div>
+
+          <h2 className="font-display text-xl font-semibold">
+            {mode === "login" ? "Bem-vindo de volta" : "Crie sua conta"}
+          </h2>
+          <p className="mb-6 mt-1 text-sm text-muted-foreground">
+            {mode === "login"
+              ? "Entre para ver o status dos seus monitores."
+              : "Leva menos de um minuto."}
+          </p>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="email">E-mail</Label>
@@ -74,18 +147,8 @@ export default function LoginPage() {
               {isPending ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}
             </Button>
           </form>
-
-          <button
-            type="button"
-            onClick={() => setMode(mode === "login" ? "register" : "login")}
-            className="mt-4 text-sm text-muted-foreground hover:underline w-full text-center"
-          >
-            {mode === "login"
-              ? "Não tem conta? Cadastre-se"
-              : "Já tem conta? Entrar"}
-          </button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </main>
   );
 }

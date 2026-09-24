@@ -4,36 +4,113 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 0 0% 100%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --radius: 0.5rem;
-  }
+    /* Neutrals — deep ink, not pure black */
+    --background: 216 41% 7%;
+    --foreground: 216 33% 94%;
+    --panel: 217 30% 11%;
+    --panel-hover: 217 28% 14%;
+    --card: 217 30% 11%;
+    --card-foreground: 216 33% 94%;
+    --border: 217 22% 19%;
+    --muted: 217 22% 16%;
+    --muted-foreground: 217 14% 60%;
 
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 0 0% 100%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
+    /* Brand accent — used for actions, links, focus only */
+    --primary: 222 100% 68%;
+    --primary-foreground: 222 60% 10%;
+
+    /* Signal colors — semantic, tied to monitor health */
+    --signal-up: 160 74% 50%;
+    --signal-down: 356 100% 68%;
+    --signal-warn: 38 96% 62%;
+
+    --destructive: 356 90% 62%;
+    --destructive-foreground: 0 0% 100%;
+
+    --radius: 0.625rem;
   }
 }
 
 @layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  ::selection {
+    background-color: hsl(var(--primary) / 0.28);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  }
+  .font-data {
+    font-family: var(--font-data), ui-monospace, "SFMono-Regular", monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Subtle dot-grid, evokes a network of nodes without being a decorative gradient */
+  .bg-dot-grid {
+    background-image: radial-gradient(hsl(var(--foreground) / 0.06) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+}
+
+@layer utilities {
+  @keyframes pulse-draw {
+    0% {
+      stroke-dashoffset: 1000;
+    }
+    100% {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes breathe {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.55;
+      transform: scale(0.82);
+    }
+  }
+  @keyframes breathe-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.55;
+    }
+    100% {
+      transform: scale(2.1);
+      opacity: 0;
+    }
+  }
+  .animate-pulse-line {
+    stroke-dasharray: 1000;
+    animation: pulse-draw 2.6s linear infinite;
+  }
+  .animate-breathe {
+    animation: breathe 2.4s ease-in-out infinite;
+  }
+  .animate-breathe-ring {
+    animation: breathe-ring 2.4s ease-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pulse-line,
+    .animate-breathe,
+    .animate-breathe-ring {
+      animation: none;
+    }
+  }
 }
