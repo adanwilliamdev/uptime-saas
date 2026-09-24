@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,10 +10,6 @@ services:
       POSTGRES_PASSWORD: uptime_secret
       POSTGRES_DB: uptime_db
     ports:
-      # Host port movido de 5432 -> 5433: no Windows, 5432 frequentemente
-      # cai numa faixa de portas excluída pelo Hyper-V/WSL2 (bind falha com
-      # erro de permissão, mesmo sem nenhum outro processo usando a porta).
-      # A porta dentro do container continua 5432 normalmente.
       - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data

@@ -3,8 +3,6 @@ import os
 import sys
 from logging.config import fileConfig
 
-import asyncpg.exceptions as pg_exceptions
-
 # Garante que a raiz do backend/ esteja no sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -18,12 +16,19 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from app.core.config import settings
 from app.db.base import Base
 from app.models import models  # noqa: F401  (importa p/ registrar metadata)
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# A URL real de conexão vem sempre de app/core/config.py (que lê backend/.env),
+# nunca do valor estático em alembic.ini — assim as duas nunca ficam
+# dessincronizadas (o valor em alembic.ini existe só para o alembic não
+# reclamar de configuração ausente, e é sempre sobrescrito aqui).
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 target_metadata = Base.metadata
 
@@ -57,29 +62,9 @@ async def run_async_migrations() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    # No Windows, mesmo com o WindowsSelectorEventLoopPolicy acima, a primeira
-    # conexão logo após o container do Postgres subir às vezes é derrubada
-    # pelo Docker Desktop (vpnkit/WSL2) com ConnectionResetError/WinError 10054
-    # ou ConnectionDoesNotExistError. Como essa migration roda uma única vez
-    # (sem pool para reaproveitar conexão), fazemos algumas tentativas com
-    # backoff antes de desistir.
-    last_error: Exception | None = None
-    for attempt in range(1, 6):
-        try:
-            async with connectable.connect() as connection:
-                await connection.run_sync(do_run_migrations)
-            last_error = None
-            break
-        except (OSError, ConnectionError, pg_exceptions.ConnectionDoesNotExistError, pg_exceptions.CannotConnectNowError) as exc:
-            last_error = exc
-            print(
-                f"[alembic] Conexão com o Postgres falhou (tentativa {attempt}/5): "
-                f"{exc!r}. Tentando novamente em {attempt * 2}s..."
-            )
-            await asyncio.sleep(attempt * 2)
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
     await connectable.dispose()
-    if last_error is not None:
-        raise last_error
 
 
 def run_migrations_online() -> None:
