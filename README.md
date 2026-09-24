@@ -163,7 +163,7 @@ Antes de executar o projeto, certifique-se de possuir:
 Clone o repositório:
 
 ```bash
-git clone <REPOSITORY_URL>
+git clone https://github.com/adanwilliamdev/uptime-saas
 cd uptime-saas
 ```
 
